@@ -1,0 +1,57 @@
+---
+title: "Environmental Exposrues and Urinary Glypohsate Levels"
+output: html_document
+date: "2023-08-24"
+---
+
+
+
+```{r setup, include=FALSE}
+########################################################################################################################
+# SETUP
+########################################################################################################################
+# Clear workspace of all objects and unload all extra (non-base) packages
+rm(list = ls(all = TRUE))
+if (!is.null(sessionInfo()$otherPkgs)) {
+  res <- suppressWarnings(
+    lapply(paste('package:', names(sessionInfo()$otherPkgs), sep=""),
+           detach, character.only=TRUE, unload=TRUE, force=TRUE))
+}
+
+knitr::opts_chunk$set(echo = F, 
+                      cache=F, cache.comments = F, 
+                      message = F, warning = F, 
+                      tidy.opts=list(width.cutoff=60), tidy=TRUE,
+                      fig.height = 8, fig.width = 8)  
+
+pacman::p_load(raster, sf, #spatial analyses
+               tidyverse,
+               survey #analyze complex surveys
+               )
+
+########################################################################################################################
+# DIRECTORY SETUP
+########################################################################################################################
+output_path <- file.path("output")
+if(!dir.exists(output_path) {dir.create(output_path, recursive = T)})
+  
+  cdl_path <- file.path("data", "raw", "cdl")
+
+
+########################################################################################################################
+# COMMON VARIABLES
+########################################################################################################################
+
+
+
+
+
+
+########################################################################################################################
+# LOAD DATA
+########################################################################################################################
+
+
+```
+
+ 

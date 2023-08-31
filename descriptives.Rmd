@@ -1,0 +1,243 @@
+---
+title: "Urinary Glyphosate"
+author: "Magali Blanco"
+date: ' `r Sys.time()` '
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_depth: '3'
+    number_sections: true
+    toc_float: true
+    collapsed: false
+    smooth_scroll: false
+editor_options: 
+  chunk_output_type: console
+---
+# Resources
+
+[Intro to nhanesA](https://cran.r-project.org/web/packages/nhanesA/vignettes/Introducing_nhanesA.html) 
+
+[NHANES in R intro & tutorial](https://ehsanx.github.io/intro2R/introduction-to-nhanes.html)
+
+
+
+
+# . 
+
+```{r, setup, include=F}
+# Clear workspace of all objects and unload all extra (non-base) packages
+rm(list = ls(all = TRUE))
+if (!is.null(sessionInfo()$otherPkgs)) {
+  res <- suppressWarnings(
+    lapply(paste('package:', names(sessionInfo()$otherPkgs), sep=""),
+           detach, character.only=TRUE, unload=TRUE, force=TRUE))
+}
+
+knitr::opts_chunk$set(echo = F, 
+                      cache=F, cache.comments = F, 
+                      message = F, warning = F, 
+                      tidy.opts=list(width.cutoff=60), tidy=TRUE,
+                      fig.height = 8, fig.width = 8)  
+
+pacman::p_load(tidyverse,
+               #haven, #read SAS files
+               nhanesA, # retrieve NHANES data 
+               survey #analyze complex surveys
+               )
+ 
+# ggplot settings
+theme_set(theme_bw())
+theme_update(legend.position = "bottom",
+             # WHY do I have to do this all of a sudden?? plots have a black background otherwise
+             #plot.background = element_rect(fill = "white", color = NA)
+             )
+
+set.seed(1)
+
+image_path <- file.path("..", "Manuscript", "Images")
+data_path <- file.path("Data", "Raw")
+
+```
+
+# Upload Data 
+
+```{r}
+# nhanesCodebook('DEMO_D', 'RIAGENDR')
+# q2007tables <- lapply(q2007names, nhanes)
+
+# get file names 
+dem_t_name <- nhanesTables("DEMO", 2013) %>% 
+  pull(Data.File.Name)
+diet_t_names <- nhanesTables("DIET", 2013) %>%
+  filter(grepl("Dietary Interview", Data.File.Description),
+         grepl("First Day", Data.File.Description)) #%>% pull(Data.File.Name)
+exam_t_names <- nhanesTables("EXAM", 2013) %>%
+  filter(grepl("Body Measures", Data.File.Description)) #%>% pull(Data.File.Name)
+lab_t_names <- nhanesTables("LAB", 2013) %>% arrange(Data.File.Name) %>%
+  filter(grepl("Albumin & Creatinine - Urine|Glyphosate", Data.File.Description)) #%>% pull(Data.File.Name)
+q_t_names <- nhanesTables("Q", 2013) %>% arrange(Data.File.Name) %>%
+  filter(grepl("Alcohol Use|Current Health Status|Occupation|Pesticide Use|Smoking - Cigarette Use", Data.File.Description)) #%>% pull(Data.File.Name)
+
+# import raw datasets directly from the NHANES website
+## 2013-2014
+glyphosate <- nhanes("SSGLYP_H")  
+ids <-unique(glyphosate$SEQN)
+demographics <- nhanes("DEMO_H")
+bmi <- nhanes("BMX_H")  
+creatinine <- nhanes("ALB_CR_H")
+alcohol <- nhanes("ALQ_H")
+health <- nhanes("HSQ_H")
+occupation <- nhanes("OCQ_H")
+pesticides <- nhanes("PUQMEC_H")
+smoke <- nhanes("SMQ_H")
+
+diet_food_codes <- nhanes("DRXFCD_H") %>%
+  # match food code name to the day 1 dietary survey food code name
+  rename(DR1IFDCD = DRXFDCD)
+diet_foods <- nhanes("DR1IFF_H") %>%
+  # add food code descriptions
+  left_join(diet_food_codes)
+diet_tot <- nhanes("DR1TOT_H") 
+
+## 2015-2016
+glyphosate2 <- nhanes("SSGLYP_I") %>%
+  # --> ? diff names for weights 
+  rename(WTSSCH2Y = WTSSGL2Y)
+
+ids2 <-unique(glyphosate$SEQN)
+demographics2 <- nhanes("DEMO_I")
+bmi2 <- nhanes("BMX_I")  
+creatinine2 <- nhanes("ALB_CR_I")
+alcohol2 <- nhanes("ALQ_I")
+health2 <- nhanes("HSQ_I")
+occupation2 <- nhanes("OCQ_I")
+pesticides2 <- nhanes("PUQMEC_I")
+smoke2 <- nhanes("SMQ_I")
+
+
+
+
+
+
+# --> join wanted covariates to glyphosate
+
+```
+
+
+```{r, eval=F}
+# food codes that need coding
+foods_to_code <- diet_foods %>%
+  #filter(SEQN %in% ids) %>%
+  group_by(DR1IFDCD, DRXFCSD, DRXFCLD) %>%
+  mutate(no_tot_reports = n()) %>%
+  # indicator of whether in sample
+  ungroup() %>%
+  mutate(reported_in_sample = SEQN %in% ids) %>%
+  
+  # if anybody in the sample reported it, it's a 'yes'
+  group_by(DR1IFDCD, DRXFCSD, DRXFCLD, no_tot_reports) %>%
+  mutate(reported_in_sample = max(reported_in_sample)) %>%
+  distinct(DR1IFDCD, DRXFCSD, DRXFCLD, no_tot_reports, reported_in_sample) %>%
+  
+  mutate(
+    soy = NA,
+    corn = NA,
+    oats = NA,
+    canola = NA,
+    high_processed_corn_soy = NA,
+    high_gmo = NA,
+    high_green_burn = NA)
+
+# add foods not reported in the day 1 survey, and indicate that nobody reported these
+foods_to_code <- left_join(diet_food_codes, foods_to_code) %>% 
+  mutate_at(vars(no_tot_reports, reported_in_sample), ~ifelse(is.na(.), 0, .))
+
+
+write.csv(foods_to_code, file.path("Data", "Output", "foods_to_code.csv"), row.names = F)
+
+# diet_foods %>%
+#   filter(SEQN == "73558") %>% View()
+
+```
+
+```{r}
+dem_vars <- c("SEQN", 
+              "RIDAGEYR"#, # age
+                #RIAGENDR, # gender
+  
+                )
+
+```
+
+# TEST - sample size
+
+```{r}
+gly <- left_join(glyphosate, select(demographics, dem_vars)) %>%
+  rbind(left_join(glyphosate2, select(demographics2, dem_vars))) %>%
+  # missing gly value
+  drop_na(SSGLYP)
+
+
+gly %>%
+  mutate(age_group = ifelse(RIDAGEYR <=19, "child", "adult")) %>%
+  group_by(age_group) %>%
+  summarize(n = n())
+
+```
+
+
+
+
+
+# Create survey objects
+
+```{r}
+## EXAMPLE of creating a a survye design object before using other specific fns
+# NHANES_all <- svydesign(data=One, id=~SDMVPSU, strata=~SDMVSTRA, weights=~WTMEC4YR, nest=TRUE)
+
+# # do this afterwards to avoid incorrectly estimating variance
+# NHANES <- subset(NHANES_all, inAnalysis==1)
+
+## mean and SE for depression of the subpopulation of interest
+# svymean(~Depression, NHANES)
+
+
+```
+
+
+
+# distribution of glyphosate values
+
+check for extremes, skewness, missingness, etc.
+
+```{r}
+
+```
+
+
+# Table 1: descriptive statistics
+
+distribution of relevant variables 
+
+? include weights? 
+
+```{r}
+
+
+```
+
+
+# Subgroup Analyses 
+
+```{r}
+
+```
+
+
+
+# Spatial Analysis
+
+* by rural/urban; state/zip 
+
+
