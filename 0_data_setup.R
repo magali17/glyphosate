@@ -194,6 +194,8 @@ cdl_wheat_frequency <-raster(file.path(cdl_path, "Crop_Frequency_2008-2022","cro
 
 # in plasmid:
 # ERROR: Error in curl::curl_fetch_disk(url, x$path, handle = handle) : transfer closed with outstanding read data remaining
+
+# 8/31/23: works in plasmid!
 nlcd <- get_nlcd(
   template = tigris::nation(year = 2021), # "Retrieving data for the year 2021"
   label = '2016 USA', 
