@@ -20,7 +20,6 @@ knitr::opts_chunk$set(echo = F,
 # install.packages("rgdal")
 pacman::p_load(raster, #rgdal,
                tidyverse,
-               #tidyverse,
                nhanesA, # retrieve NHANES data
                sf
                )
@@ -188,12 +187,20 @@ cdl_wheat_frequency <-raster(file.path(cdl_path, "Crop_Frequency_2008-2022","cro
 # nlcd_2016 <- raster(file.path(nlcd_path, "nlcd_2016_land_cover_l48_20210604.ige"))
 
 ###### still having issues downloading FedData
-# pacman::p_load(FedData) #tigris, 
+# pacman::p_load(FedData,tigris)
 
 #####in Brain
-install.packages("DevTools") # terra, ‘units’ ‘terra’ ‘raster’ ‘sf’
+#pacman::p_load("DevTools") # terra, ‘units’ ‘terra’ ‘raster’ ‘sf’
 
-us <- tigris::nation()
+# in plasmid:
+# ERROR: Error in curl::curl_fetch_disk(url, x$path, handle = handle) : transfer closed with outstanding read data remaining
+nlcd <- get_nlcd(
+  template = tigris::nation(year = 2021), # "Retrieving data for the year 2021"
+  label = '2016 USA', 
+  year = 2016, 
+  dataset = 'landcover',
+  extraction.dir = file.path("output", "nlcd_us_2916")
+)
 
 
 ########################################################################################################################
