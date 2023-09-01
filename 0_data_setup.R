@@ -87,10 +87,6 @@ adi0 <- read.csv(file.path("data", "raw", "adi", "US_2015_ADI_Census Block Group
                  colClasses = c(rep("character", 5))) 
 
 adi <- adi0 %>%
-  # mutate(
-  #   # drop indicators of missingness # don't do now until later?
-  #   ADI_NATRANK = ifelse(ADI_NATRANK %in% as.character(1:100), as.numeric(ADI_NATRANK), NA),
-  #   ADI_STATERNK = ifelse(ADI_STATERNK %in% as.character(1:10), as.numeric(ADI_STATERNK), NA)) %>%
   #rename to match NHANES
   select(BG2KX = FIPS, adi_natrank=ADI_NATRANK, adi_staternk = ADI_STATERNK)
  
@@ -186,11 +182,11 @@ nlcd_path <- file.path("data", "raw", "nlcd", paste0("nlcd_us_", yr))
 !if(file.exists(nlcd_path)) { 
   nlcd <- get_nlcd(
     template = us_template,
-    label = paste(yr, ' USA'), 
-    year = yr, 
+    label = paste(yr, ' USA'),
+    year = yr,
     dataset = 'landcover',
-    extraction.dir = nlcd_path
-    )} else {
+    extraction.dir = nlcd_path)
+  } else {
   # --> add yr to nlcd object name?
   nlcd <- raster(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif"))
                  )
