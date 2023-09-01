@@ -21,7 +21,8 @@ knitr::opts_chunk$set(echo = F,
 pacman::p_load(raster, #rgdal,
                tidyverse,
                nhanesA, # retrieve NHANES data
-               sf
+               sf,
+               tigris, FedData #NLCD
                )
 
 ########################################################################################################################
@@ -176,33 +177,33 @@ cdl_wheat_frequency <-raster(file.path(cdl_path, "Crop_Frequency_2008-2022","cro
 ########################################################################################################################
 # NLCD
 ########################################################################################################################
-# #install.packages("FedData") # ERROR -  keep getting restart messages; 
-# # devtools::install_github("ropensci/FedData") # EROR - still have installation issues
-# pacman::p_load(FedData)
-# nlcd_2016 <- get_nlcd(year=2016, dataset = "landcover")
+us_template <- tigris::nation(year = 2021) 
+
+yr <- c(2016)
+
+nlcd_path <- file.path("data", "raw", "nlcd", paste0("nlcd_us_", yr))
+
+!if(file.exists(nlcd_path)) { 
+  nlcd <- get_nlcd(
+    template = us_template,
+    label = paste(yr, ' USA'), 
+    year = yr, 
+    dataset = 'landcover',
+    extraction.dir = nlcd_path
+    )} else {
+  # --> add yr to nlcd object name?
+  nlcd <- raster(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif"))
+                 )
+    }
 
 
-# # --> ERROR LOADING
-# nlcd_path <- file.path("data", "raw", "nlcd")
-# nlcd_2016 <- raster(file.path(nlcd_path, "nlcd_2016_land_cover_l48_20210604.ige"))
+file.exists(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif")))
 
-###### still having issues downloading FedData
-# pacman::p_load(FedData,tigris)
 
-#####in Brain
-#pacman::p_load("DevTools") # terra, ‘units’ ‘terra’ ‘raster’ ‘sf’
 
-# in plasmid:
-# ERROR: Error in curl::curl_fetch_disk(url, x$path, handle = handle) : transfer closed with outstanding read data remaining
+# plot(nlcd)
 
-# 8/31/23: works in plasmid!
-nlcd <- get_nlcd(
-  template = tigris::nation(year = 2021), # "Retrieving data for the year 2021"
-  label = '2016 USA', 
-  year = 2016, 
-  dataset = 'landcover',
-  extraction.dir = file.path("output", "nlcd_us_2916")
-)
+
 
 
 ########################################################################################################################
