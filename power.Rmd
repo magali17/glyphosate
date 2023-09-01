@@ -1,0 +1,114 @@
+---
+title: "Power"
+output: html_document
+date: '2022-12-17'
+---
+
+```{r, setup, include=F}
+# Clear workspace of all objects and unload all extra (non-base) packages
+rm(list = ls(all = TRUE))
+if (!is.null(sessionInfo()$otherPkgs)) {
+  res <- suppressWarnings(
+    lapply(paste('package:', names(sessionInfo()$otherPkgs), sep=""),
+           detach, character.only=TRUE, unload=TRUE, force=TRUE))
+}
+
+knitr::opts_chunk$set(cache=F, cache.comments = F, message = F, warning = F, tidy.opts=list(width.cutoff=60), tidy=TRUE)  
+
+pacman::p_load(tidyverse, dplyr,  pwr #,knitr, powerSurvEpi
+               )
+
+# ggplot settings
+theme_set(theme_bw())
+theme_update(legend.position = "bottom")
+
+set.seed(1)
+
+```
+
+# values 
+
+```{r}
+(n_tot <- 2310 + 2428)
+
+# use?
+n_child <- 1670
+n_adult <- 3068
+
+
+pwr_lvl <- 0.80
+sig_lvl <- 0.05
+
+# Ospina 2022 2013-2014 overall values
+ospina_mean <- 0.411
+ospina_upper <- 0.450
+
+# upper_CI = mean + 1.96*SE
+# SE = (upper_CI - mean)/1.96
+
+# SE = SD/sqrt(N)
+# SD = sqrt(N)*SE
+# SD = sqrt(n)*[(upper_CI - mean)/1.96]
+ 
+(sd_pooled <- sqrt(n_tot)*(ospina_upper - ospina_mean)/1.96) #1.37 ug/L
+
+```
+
+
+# t-test
+
+could replace n_tot with n_adults or n_children
+
+```{r}
+
+
+print("effect size we will be able to detect given a sample size, power, and significance level")
+pwr1 <- pwr.t.test(n=n_tot/2, power = pwr_lvl, sig.level = sig_lvl,
+           type="two.sample", alternative="two.sided")
+
+# d = (u1 - u2)/sd_pooled)
+# u1 - u2 = d*sd_pooled
+pwr1$d*sd_pooled
+
+```
+
+# effect sizes detected in the literature
+
+
+
+## Ospina 2022 
+
+fasting > 8 hr vs ≤ 8 hr  (Table 2), ug/L     
+* children: `r 0.51-0.43 # 0.08` 
+* adults: `r 0.44-0.37 # 0.07`   
+* overall: 0.10 (Table S1,ug/g creatinine)   
+
+overall (table S1), (ug/g creatinine)
+* cereal consumption: `r 0.517 - 0.422 # 0.09`     
+* soft drink consumption:  `r 0.472 - 0.405 # 0.067`   
+* season of sample collected: `r 0.478 - 0.401 # 0.077`    
+* used products to kill weeds: `r 0.473 - 0.442 # 0.031`
+ 
+## Curl manuscript in proress
+* Table 3, near field vs far from field GM difference is: `r 0.19-0.16 #0.03`
+
+
+## Gillezeau  2019 review     
+note that these studies used different methods and diferent LODs 
+
+* general population avg: 0.16-7.6    
+* occupationally exposed individuals: 0.26-73.5   
+
+the minimum difference is about 0.10, close to the effect size we expect to be able to detect
+
+## Curwin ___ farm vs non-farm urinary gly in Iowa
+* Table 2 non-farm vs farm: 0.3 (mother), 0.5 (father), 0.7 (child)
+
+* we expect to see higher variability in NHANES since estimates will be from places throughout the US
+
+# Power Language (not used in the end)
+
+"Using a two-sided, two-sample t-test for a total sample size of 4,738, we calculated having 80% power at a 0.05 significance level to detect an effect size of 0.11 ug/L given a pooled SD similar to the 2013-2014 NHANES of 1.37 ug/L (Ospina et al. 2022)."
+
+Note: This estimate: 1) does not stratify by children vs adults; 2) assumes that comparison groups are the same size
+
