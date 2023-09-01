@@ -201,7 +201,7 @@ file.exists(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif"
 
 
 
-# plot(nlcd)
+# raster::plot(nlcd)
 
 
 
