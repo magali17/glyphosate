@@ -154,7 +154,8 @@ cdl_path <- file.path("data", "raw", "cdl")
 cdl_2013 <- raster(file.path(cdl_path, "2013_30m_cdls","2013_30m_cdls.tif"))
 cdl_2015 <- raster(file.path(cdl_path, "2015_30m_cdls","2015_30m_cdls.tif"))
 cultivated_crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip = 1, col.names = c("class")) %>%
-  rownames_to_column(var="id") 
+  rownames_to_column(var="id") %>%
+  mutate(id = as.numeric(id))
 
 # --> keep?
 cdl_corn_frequency <-raster(file.path(cdl_path, "Crop_Frequency_2008-2022","crop_frequency_corn_2008-2022.tif"))
@@ -173,31 +174,28 @@ cdl_wheat_frequency <-raster(file.path(cdl_path, "Crop_Frequency_2008-2022","cro
 ########################################################################################################################
 # NLCD
 ########################################################################################################################
-us_template <- tigris::nation(year = 2021) 
+# not using for now; having issues w/ the downloaded file still - there are no values in the raster
 
-yr <- c(2016)
-
-nlcd_path <- file.path("data", "raw", "nlcd", paste0("nlcd_us_", yr))
-
-!if(file.exists(nlcd_path)) { 
-  nlcd <- get_nlcd(
-    template = us_template,
-    label = paste(yr, ' USA'),
-    year = yr,
-    dataset = 'landcover',
-    extraction.dir = nlcd_path)
-  } else {
-  # --> add yr to nlcd object name?
-  nlcd <- raster(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif"))
-                 )
-    }
-
-
-file.exists(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif")))
-
-
-
-# raster::plot(nlcd)
+# us_template <- tigris::nation(year = 2021) 
+# # us_template <- tigris::counties('WA') #%>% filter(NAME == 'King')
+# 
+# yr <- c(2016)
+# 
+# nlcd_path <- file.path("data", "raw", "nlcd", paste0("nlcd_us_", yr))
+# 
+# !if(file.exists(nlcd_path)) { 
+#   nlcd <- get_nlcd(
+#     template = us_template,
+#     label = paste(yr, ' USA'),
+#     year = yr,
+#     dataset = 'landcover', 
+#     extraction.dir = nlcd_path)
+#   } else {
+#   # --> add yr to nlcd object name?
+#   nlcd <- raster(file.path(nlcd_path, paste0(yr, "  USA_NLCD_Land_Cover_", yr, ".tif")))
+#     }
+# 
+# # raster::plot(nlcd)
 
 
 
@@ -223,6 +221,9 @@ lat_long_sample_indeces <- sample(x = 1:nrow(us.cities), size = length(gly_ids),
 state_county_sample_indeces <- sample(x = 1:nrow(county_gly), size = length(gly_ids), replace = T)
 block_group_sample_indeces <- sample(x = 1:nrow(adi), size = length(gly_ids), replace = T)
   
+
+# --> UPDATE so that SEQN is for all of NHANES sample, then filter later
+
 fake_GEO_2010 <- data.frame(SEQN = gly_ids,
                             LONG = us.cities$long[lat_long_sample_indeces], #x
                             LAT = us.cities$lat[lat_long_sample_indeces],#y
