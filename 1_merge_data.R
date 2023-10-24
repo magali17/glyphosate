@@ -11,11 +11,11 @@ if (!is.null(sessionInfo()$otherPkgs)) {
            detach, character.only=TRUE, unload=TRUE, force=TRUE))
 }
 
-knitr::opts_chunk$set(echo = F, 
-                      cache=F, cache.comments = F, 
-                      message = F, warning = F, 
-                      tidy.opts=list(width.cutoff=60), tidy=TRUE,
-                      fig.height = 8, fig.width = 8)  
+# knitr::opts_chunk$set(echo = F, 
+#                       cache=F, cache.comments = F, 
+#                       message = F, warning = F, 
+#                       tidy.opts=list(width.cutoff=60), tidy=TRUE,
+#                       fig.height = 8, fig.width = 8)  
 
 pacman::p_load(tidyverse,  
                sf,
@@ -27,24 +27,42 @@ pacman::p_load(tidyverse,
 ########################################################################################################################
 load(file.path("output", "analysis_datasets.rds"))
 
-#????
-# test <- cdl_2013
-# raster::crs(test) <- 9822 #EPSG code for Albers Equal Area Projection
-# raster::plot(test)
+# rename for easier acccess later
+SSGLYP_H <- nhanes2013$SSGLYP_H
+SSGLYP_I <- nhanes2015$SSGLYP_I
+
+GEO_2010 <- fake_GEO_2010 #RDC to replace my generated file with the real one
+
+# external environmental files
+cultivated_crops <- read.csv(file.path("data", "modified", "cultivated_crops.csv"))
+
+cdl_path <- file.path("data", "raw", "cdl")
+cdl_2013 <- raster(file.path(cdl_path, "2013_30m_cdls","2013_30m_cdls.tif"))
+cdl_2015 <- raster(file.path(cdl_path, "2015_30m_cdls","2015_30m_cdls.tif"))
+# plot(cdl_2015)
+# st_crs(cdl_2013)
+
+# adi <- read.csv(file.path("data", "modified", "adi.csv"))
+# county_gly <- read.csv(file.path("data", "modified", "county_gly.csv"))
 
 
 ########################################################################################################################
 # COMMON VARIABLES
 ########################################################################################################################
 # NHANES CRS
+
 # --> update
 lat_long_crs <- 4326 #WGS84
-m_crs <- 32148
+
+#m_crs <- 32148
+# 9822 #EPSG code for Albers Equal Area Projection
 
 cdl_pixel_resolution_km2 <-(30/1e3)^2 #km
 
 # --> update to be for GLY data? or entire NHANES sample for later comparison of urinary representativeness vs that year's sample?
 # --> why does DEMO_H have ~10k rows??
+
+# SEQN for all samples with urinary glyphosate data
 gly_seqn <- c(
   unique(nhanes2013$SSGLYP_I$SEQN),
   unique(nhanes2015$SSGLYP_I$SEQN)#,
@@ -52,26 +70,22 @@ gly_seqn <- c(
   #select(nhanes2017$SSGLYP_J, SEQN)
 )
 
-# --> OK that project crs becomes "unnamed"??
+# --> do this all in the fn instead?
 
 fake_GEO_2010 <- fake_GEO_2010 %>%
+  # st_as_sf(coords = c("LONG", "LAT"), remove=F, 
+  #          
+  #          # --> what CRS to use?
+  #          
+  #          crs=lat_long_crs) %>%
+  # 
+  # # same CRS as CDL, which is in meters
+  # st_transform(st_crs(cdl_2013)) #%>%
   
-  # --> need to do this??
-  
-  st_as_sf(coords = c("LONG", "LAT"), remove=F, crs=lat_long_crs) %>%
-  # same CRS as CDL, which is in meters
-  st_transform(st_crs(cdl_2013)) #%>%
   
   # --> can RDC Do this??
-  #filter(SEQN %in% gly_seqn)
+  filter(SEQN %in% gly_seqn)
 
-
-# --> TEST?? ERROR IN PROEJCTION OTHERWISE??
-# crs(cdl_2013) <- m_crs
-# projection(cdl_2013) <- m_crs
-
-
-  
   
   
 ########################################################################################################################
@@ -102,29 +116,6 @@ desication <- c(wheat,
                     # --> ??
                     31:34 # canola, flaxseed, safflower, rape seed
                     )
-
-############################################################################################
-# fn returns dataframe with crop frequencies within a buffered location
-
-# raster_dt=cdl_2013
-# locations_dt = fake_GEO_2010[1:10,]
-# buffer. = 500
-
-crop_frequency_in_buffer <- function(raster_dt, locations_dt, buffer.) {
-  #make names the same across different datasets
-  names(raster_dt) <- "land_id"
-  
-  # create a df with land info for a given location & buffer
-  crop_frequency <- raster::extract(raster_dt, locations_dt, buffer=buffer., df=TRUE) %>%
-    as_tibble() %>% 
-    # frequency of crops in each buffered location
-    group_by_all() %>% 
-    summarize(pixel_count=n()) %>%
-    ungroup() %>%
-    mutate(buffer_m = buffer.)
-  
-  return(crop_frequency)
-}
 
 ############################################################################################
 # function returns the total number of a specific crop for a given buffered area
@@ -158,11 +149,10 @@ crop_total_in_buffer <- function(df, keep_crops, crop_label, pixel_resolution) {
 
 ############################################################################################
 # calculate total number of agricultral crops near a location
-buffers <- c(500, 1e3#,5e3,10e3
-             )
+buffers <- c(#500, 1e3,
+             5e3,10e3)
 crops <- c("cultivated", "corn", "cotton", "soybeans", "wheat", "gmo", "desication")
 
-#lapply(crops, get)
 
 # b=buffers[1]
 # calculate the frequency of cropped land at buffered locations

@@ -11,6 +11,8 @@ if (!is.null(sessionInfo()$otherPkgs)) {
            detach, character.only=TRUE, unload=TRUE, force=TRUE))
 }
 
+# install pacman if not already installed & use it to download/install packages
+if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse,  
                sf,
                #rgdal, raster, #deprecated/old - use terra instead  
@@ -19,7 +21,8 @@ pacman::p_load(tidyverse,
                terra # replaces raster (& gdal?)
                )
 
-mc_cores <- 3
+# --> this can be increased for parallel processing later with mclapply()
+mc_cores <- 2
 
 ########################################################################################################################
 # LOAD DATA ENVIRONMENT

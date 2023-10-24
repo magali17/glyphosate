@@ -37,21 +37,108 @@ if(!dir.exists(output_path) {dir.create(output_path, recursive = T)})
   
   cdl_path <- file.path("data", "raw", "cdl")
 
+########################################################################################################################
+# LOAD DATA
+########################################################################################################################
+
+# TEMP?
+# NHANES FILES
+load(file.path("output", "analysis_datasets.rds"))
+
+# rename for easier acccess later
+SSGLYP_H <- nhanes2013$SSGLYP_H
+SSGLYP_I <- nhanes2015$SSGLYP_I
+
+
+
 
 ########################################################################################################################
 # COMMON VARIABLES
 ########################################################################################################################
+diet_groups <- list("corn", 
+                    c("soy", "tofu", "tempeh", "edamame", "textured vegetable protein", "miso"),
+                    # note that soybeans are legumes
+                    
+                    # --> also add category start_with("41")
+                    c("bean", "lentil", "peas"), # not "pea", which returns peanut butter etc.
+                    c("oat")
+                    )
+
+# add to beans, lentils, etc.
+legumes_fc <- diet$DRXFCD_H %>% 
+  filter(grepl("^41", DRXFDCD)) %>%
+  distinct(DRXFDCD) %>%
+  pull() %>%
+  as.vector()
+  
+# just use this? 
+# Looking up wheat|bread|pasta|cereal|grain in 2013-14 returns mostly breaded mixed dishes, e.g., chicken tenders
+grains_fc <- diet$DRXFCD_H %>% 
+  filter(grepl("^5", DRXFDCD)) %>%
+  distinct(DRXFDCD) %>%
+  pull() %>%
+  as.vector()
 
 
 
 
 
+# # --> RECODE 'diet_groups_h' FOR AL diet_groups & survey year?
+# # diet
+# corn_h <- diet$DRXFCD_H %>%
+#   filter(grepl("corn", DRXFCLD, ignore.case=T)) %>%
+#   pull(DRXFDCD) %>%
+#   as.vector() %>%
+#   suppressWarnings()
 
-########################################################################################################################
-# LOAD DATA
-########################################################################################################################
+ 
+```
+
+# NHANES Setup
+
+```{r}
 
 
 ```
 
  
+
+
+# Diet day 1 for GLY samples
+
+```{r}
+# add food labels to food intake
+diet_h <- left_join(diet$DR1IFF_H, diet$DRXFCD_H, by = c("DR1IFDCD" = "DRXFDCD")) %>%
+  # only keep gly samples
+  filter(SEQN %in% SSGLYP_H$SEQN)
+
+
+```
+
+```{r}
+# # QC: how frequently are foods reported?
+# diet_h %>% 
+#   filter(grepl("wheat|bread|pasta|cereal|grain", DRXFCLD)) %>% 
+#   group_by(DR1IFDCD, DRXFCLD) %>% 
+#   summarize(n=n()) %>%
+#   arrange(-n)  
+
+
+# most reported foods
+diet_h %>%
+  group_by(DRXFCSD) %>%
+  summarize(n = n()) %>% 
+  filter(n >= quantile(n, 0.98)) %>%
+  
+  arrange(n) %>%
+  mutate(DRXFCSD = factor(DRXFCSD, levels = c(unique(DRXFCSD)))) %>%
+  
+  ggplot(aes(y=DRXFCSD, x= n)) + 
+  geom_histogram(stat = "identity", orientation = "y")
+
+
+
+```
+
+
+
