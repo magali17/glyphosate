@@ -33,9 +33,9 @@ pacman::p_load(raster, sf, #spatial analyses
 # DIRECTORY SETUP
 ########################################################################################################################
 output_path <- file.path("output")
-if(!dir.exists(output_path) {dir.create(output_path, recursive = T)})
+if(!dir.exists(output_path)) {dir.create(output_path, recursive = T)}
   
-  cdl_path <- file.path("data", "raw", "cdl")
+cdl_path <- file.path("data", "raw", "cdl")
 
 ########################################################################################################################
 # LOAD DATA

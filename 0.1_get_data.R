@@ -36,9 +36,10 @@ pacman::p_load(raster, rgdal,
 # q_t_names <- nhanesTables("Q", 2013) %>% arrange(Data.File.Name) %>%
 #   filter(grepl("Alcohol Use|Current Health Status|Occupation|Pesticide Use|Smoking - Cigarette Use", Data.File.Description)) #%>% pull(Data.File.Name)
 
-survey_year_codes <- c("H", "I", "J") #2013-2014, 2015-2016
+survey_year_codes <- c("H", "I", "J") #2013-2014, 2015-2016, 2017-2018
 
 table_prefixes <- c("SSGLYP", #glyphosate
+                    "UPHOPM", # pyrethroids, herbicides & OP's in urine
                     "DEMO", #demographics
                    "BMX", #bmi
                    "ALB_CR", #creatinine 
@@ -46,7 +47,8 @@ table_prefixes <- c("SSGLYP", #glyphosate
                    "HSQ", #health
                    "OCQ", #occupation
                    "PUQMEC", #pesticides
-                   "SMQ" #smoke
+                   "SMQ",#smoke
+                   "FSQ" #food security
                    )
 
 table_names <- lapply(survey_year_codes, function(x) paste(table_prefixes, x, sep = "_"))
@@ -59,7 +61,7 @@ names(nhanes2015) <- table_names[[2]]
 
 
 # TEMP - don't include GLY data, which isn't yet available
-table_names_temp <- setdiff(table_names[[3]], "SSGLYP_J")
+table_names_temp <- setdiff(table_names[[3]], c("SSGLYP_J", "UPHOPM_J"))
 # --> replace table_names_temp later with table_names[[3]]
 nhanes2017 <- lapply(table_names_temp, function(x) {nhanes(x)})
 names(nhanes2017) <- table_names_temp
@@ -107,7 +109,9 @@ write.csv(adi, file.path("data", "modified", "adi.csv"), row.names = F)
 
 keep_county_yrs <- c(2013:2018)
 
-county_gly0 <- read.delim(file.path("data", "raw", "county_pesticides", "EPest_county_estimates_2013_2017_v2.txt")) 
+county_gly0 <- read.delim(file.path("data", "raw", "county_pesticides", "EPest_county_estimates_2013_2017_v2.txt")) %>%
+  # include preliminary 2018 values
+  bind_rows(read.delim(file.path("data", "raw", "county_pesticides", "EPest_county_estimates_2018.txt")))
 
 county_gly <- county_gly0 %>%
   filter(COMPOUND == "GLYPHOSATE",
@@ -149,7 +153,7 @@ cultivated_crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip
 
 write.csv(cultivated_crops, file.path("data", "modified", "cultivated_crops.csv"), row.names = F)
 
-
+# cultivated_crops <- read.csv(file.path("data", "modified", "cultivated_crops.csv"))
 ########################################################################################################################
 # NLCD
 ########################################################################################################################
@@ -177,6 +181,16 @@ write.csv(cultivated_crops, file.path("data", "modified", "cultivated_crops.csv"
 # # raster::plot(nlcd)
 
 
+########################################################################################################################
+# CENSUS STATE REIGIONS AND DIVISIONS
+########################################################################################################################
+# Remove first few lines for easier merging
+states <- readxl::read_xlsx(file.path("data", "raw", "census", "state-geocodes-v2021.xlsx"), skip = 5, 
+                            col_types = c("numeric", "numeric", "numeric", "text")) %>%
+  rename("STATE2KX" = "State (FIPS)")
+# states
+
+write.csv(states, file.path("data", "modified", "state_divisions.csv"), row.names = F)
 
 
 ########################################################################################################################
