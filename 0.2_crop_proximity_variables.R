@@ -22,7 +22,7 @@ if (!is.null(sessionInfo()$otherPkgs)) {
 # install pacman if not already installed & use it to download/install necessary packages
 if (!require("pacman")) install.packages("pacman")
 pacman::p_load(tidyverse,  
-               sf,
+               sf, # spatial files
                units, # drop_units()
                parallel, #if use mclapply()
                terra # raster files
@@ -56,11 +56,10 @@ GEO_2010 <- fake_GEO_2010 %>%
 ## GEO FILES FOR NHANES PARTICIPANTS BY YEAR
 geo_2013 <- filter(GEO_2010, SEQN %in% nhanes2013$SSGLYP_H$SEQN)
 geo_2015 <- filter(GEO_2010, SEQN %in% nhanes2015$SSGLYP_I$SEQN)
-# --> NOTE: IF 2017-18 NHANAES SSGLYP DATA ARE AVAILABLE, ALSO RUN:
 geo_2017 <- filter(GEO_2010, SEQN %in% nhanes2017$SSGLYP_J$SEQN)
 
 #################################################################################
-# 1. CALCULATE AG LAND WITHIN A BUFFER
+# 1. CALCULATE LAND TYPE WITHIN A BUFFER
 #################################################################################
 # FN RETURNS DATAFRAME W/ CROP FREQUENCIES WITHIN A BUFFERED LOCATION 
 crop_frequency_in_buffer <- function(spatial_raster_data, geo_data, buffer.) {
@@ -93,9 +92,9 @@ crop_frequency_in_buffer <- function(spatial_raster_data, geo_data, buffer.) {
 #################################################################################
 buffers <- c(250, 500, 1e3, 2e3)
 
-## NOTE: FULL GEO files (e.g., geo_2013) may be too large and crash; code works when you split these into smaller files of ~300 rows each
+## --> NOTE: FULL GEO files (e.g., geo_2013) may be too large and crash; code works when you split these into smaller files of ~300 rows each
 
-## 2013 AG LAND AND 2013-14 NHANES SSGLYP
+## 2013 CROP TYPE AND 2013-14 NHANES SSGLYP
 # could use parallel processing to speed this up, e.g., mclapply(...mc.cores = 4...) 
 crop_frequency_2013 <- lapply(buffers,
                               function(b) {crop_frequency_in_buffer(spatial_raster_data = cdl_2013, #2013 land types file
@@ -105,18 +104,17 @@ crop_frequency_2013 <- lapply(buffers,
   bind_rows()
 
  
-## 2015 AG LAND AND 2015-16 NHANES SSGLYP
+## 2015 CROP TYPE AND 2015-16 NHANES SSGLYP
 crops_in_buffer_2015 <- lapply(buffers,
                                function(b)  {crop_frequency_in_buffer(spatial_raster_data = cdl_2015, #2015 land types file
                                                                         geo_data = geo_2015, #geocodes for 2015-2016 NHANES
                                                                         buffer.=b)}) %>%
   bind_rows()
 
-# --> NOTE: IF 2017-18 NHANAES SSGLYP DATA ARE AVAILABLE, ALSO RUN:
-## 2017 AG LAND AND 2017-18 NHANES SSGLYP
+## 2017 CROP TYPE AND 2017-18 NHANES SSGLYP
 crops_in_buffer_2017 <- lapply(buffers,
-                               function(b)  {crop_frequency_in_buffer(spatial_raster_data = cdl_2017, #2015 land types file
-                                                                      geo_data = geo_2017, #geocodes for 2015-2016 NHANES
+                               function(b)  {crop_frequency_in_buffer(spatial_raster_data = cdl_2017, #2017 land types file
+                                                                      geo_data = geo_2017, #geocodes for 2017-2018 NHANES
                                                                       buffer.=b)}) %>%
   bind_rows()
   
@@ -152,7 +150,7 @@ distance_to_ag <- function(spatial_raster_data, geo_data, max_distance=2e3) {
 
 # --> NOTE: FULL GEO files (e.g., geo_2013) may be too large and crash; code works when you split these into smaller files of ~300 rows each for each year
 # 2013
-crop_distances_2013 <- lapply(1:nrow(geo_2013), # participants for 2013-2014 NHANES
+crop_distances_2013 <- lapply(1:nrow(geo_2013[1:2,]), # participants for 2013-2014 NHANES
                               function(x) {
                              distance_to_ag(spatial_raster_data=cdl_2013, # 2013 land types file
                                             geo_data = geo_2013[x,] # geocodes for 2013-2014 NHANES
@@ -167,7 +165,6 @@ crop_distances_2015 <- lapply(1:nrow(geo_2015),  # participants for 2015-2016 NH
                                                )}) %>%
   bind_rows()
 
-# --> NOTE: IF 2017-18 NHANAES SSGLYP DATA ARE AVAILABLE, ALSO RUN:
 # 2017
 crop_distances_2017 <- lapply(1:nrow(geo_2017),  # participants for 2017-2018 NHANES
                                 function(x) {
@@ -181,8 +178,8 @@ crop_distances_2017 <- lapply(1:nrow(geo_2017),  # participants for 2017-2018 NH
 #################################################################################
 save(crop_frequency_2013, 
      crop_frequency_2015,
-     crop_frequency_2017, # if relevant
+     crop_frequency_2017,  
      crop_distances_2013, 
      crop_distances_2015, 
-     crop_distances_2017,# if relevant
+     crop_distances_2017,
      file= file.path("output", "crop_proximity_datasets.rds"))

@@ -66,10 +66,15 @@ table_names_temp <- setdiff(table_names[[3]], c("SSGLYP_J", "UPHOPM_J"))
 nhanes2017 <- lapply(table_names_temp, function(x) {nhanes(x)})
 names(nhanes2017) <- table_names_temp
 
-# # --> ERROR - these don't download using nhanes()??
+
+# NOTE: FOOD DESCRIPTIONS SOMETIMES CHANGE FROM YEAR-TO-YEAR, BUT ARE OVERALL SIMILAR.
+# THUS, it's probably better to create food variables using patterns/broad language rather than exact food descriptions   
+
+
+# # # --> ERROR: only DRXFCD downloads using nhanes()??
 # diet_table_prefixes <- c("DRXFCD",#food codes
-#                          "DR1IFF", #foods consumed
-#                          "DR1TOT" #total nutrients
+#                          "DR1IFF"#, #foods consumed
+#                          # "DR1TOT" #total nutrients
 #                          )
 # diet_table_names <- lapply(survey_year_codes, function(x) paste(diet_table_prefixes, x, sep = "_"))
 # 
@@ -78,12 +83,17 @@ names(nhanes2017) <- table_names_temp
 # 
 # diet2015 <- lapply(diet_table_names[[2]], function(x) {nhanes(x)})
 # names(diet2015) <- diet_table_names[[2]]
+# 
+# diet2017 <- lapply(diet_table_names[[3]], function(x) {nhanes(x)})
+# names(diet2017) <- diet_table_names[[3]]
+
+
 
 # upload diet data from XPT files
 diet_files_names <- list.files(file.path("data", "raw", "nhanes"))
 diet <- lapply(diet_files_names, function(x) read_xpt(file.path("data", "raw", "nhanes", x)))
 # remove file extensions
-names(diet) <- tools::file_path_sans_ext(diet_files_names)   
+names(diet) <- tools::file_path_sans_ext(diet_files_names)
 
 ########################################################################################################################
 # ADI
@@ -94,9 +104,16 @@ adi0 <- read.csv(file.path("data", "raw", "adi", "US_2015_ADI_Census Block Group
                  colClasses = c(rep("character", 5))) 
 
 adi <- adi0 %>%
-  #rename to match NHANES
-  select(BG2KX = FIPS, adi_natrank=ADI_NATRANK#, adi_staternk = ADI_STATERNK
-         )
+  # rename to match NHANES block group
+  ## RDCA: "this is coded as a character"
+  select(BG2KX = FIPS, adi_natrank=ADI_NATRANK) %>%
+  mutate(
+    adi_natrank_grp = ifelse(adi_natrank %in% as.character(1:25), "P1",
+                             ifelse(adi_natrank %in% as.character(26:50), "P2",
+                                    ifelse(adi_natrank %in% as.character(51:75), "P3",
+                                           ifelse(adi_natrank %in% as.character(76:100), "P4", NA
+                             ))))
+  )
  
 rm(adi0) 
 write.csv(adi, file.path("data", "modified", "adi.csv"), row.names = F)
@@ -128,10 +145,25 @@ county_gly <- county_gly0 %>%
   mutate(
     # avg pesticide estimate - low/high estimates are typically very similar anyways
     EPEST_MEAN_KG = mean(c(EPEST_LOW_KG, EPEST_HIGH_KG), na.rm=T)) %>%
-  ungroup() %>% #View()
-  # select(-c(EPEST_LOW_KG, EPEST_HIGH_KG)) %>%  
-  # pivot_wider(names_from = YEAR, values_from = county_gly_mean_kg, names_prefix = "county_gly_kg_") %>%
-  
+  ungroup() %>%  
+  # add national rank (like ADI)
+  mutate(EPEST_MEAN_NATRANK = percent_rank(EPEST_MEAN_KG),
+         EPEST_MEAN_NATRANK = EPEST_MEAN_NATRANK*100,
+         EPEST_MEAN_NATRANK_CAT = ifelse(EPEST_MEAN_NATRANK <50, "P0_50", 
+                                         ifelse(EPEST_MEAN_NATRANK >=50 & EPEST_MEAN_NATRANK <70, "P50_70",
+                                                ifelse(EPEST_MEAN_NATRANK >=70 & EPEST_MEAN_NATRANK <90, "P70_90", 
+                                                       ifelse(EPEST_MEAN_NATRANK >=90, "P90_100", NA)))),
+         # EPEST_MEAN_NATRANK_HIGH = ifelse(EPEST_MEAN_NATRANK <50, "low",
+         #                                  ifelse(EPEST_MEAN_NATRANK >50, "high", NA))
+         
+         # RDCA: "these are coded as characters"
+         #"2 digit numeric w/ leading 0s"
+         STATE_FIPS_CODE = str_pad(STATE_FIPS_CODE, 2, pad = "0"),
+         # "3-digit numeric w/ leading 0s significant"
+         COUNTY_FIPS_CODE = str_pad(COUNTY_FIPS_CODE, 3, pad = "0")
+         
+         ) %>%
+  ungroup() %>%
   # rename to match GEO_2010 merging variables
   rename(
     STATE2KX = STATE_FIPS_CODE,
@@ -139,21 +171,71 @@ county_gly <- county_gly0 %>%
   
 rm(county_gly0)
 
-# --> save in wide format??
 write.csv(county_gly, file.path("data", "modified", "county_gly.csv"), row.names = F)
+
+write.csv(filter(county_gly, YEAR == "2013"), file.path("data", "modified", "2013_county_gly.csv"), row.names = F)
+write.csv(filter(county_gly, YEAR == "2015"), file.path("data", "modified", "2015_county_gly.csv"), row.names = F)
+write.csv(filter(county_gly, YEAR == "2017"), file.path("data", "modified", "2017_county_gly.csv"), row.names = F)
 
 # county_gly <- read.csv(file.path("data", "modified", "county_gly.csv"))
 ########################################################################################################################
 # CDL
 ########################################################################################################################
+cdl_path <- file.path("data", "raw", "cdl")
 
-cultivated_crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip = 1, col.names = c("class")) %>%
+noncultivated_crops <- read.delim(file.path(cdl_path, "noncultivated_crops.txt"), skip = 1, col.names = c("class_name")) %>%
   rownames_to_column(var="id") %>%
-  mutate(id = as.numeric(id))
+  mutate(cultivated = 0)
+  
+crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip = 1, col.names = c("class_name")) %>%
+  rownames_to_column(var="id") %>%
+  
+  # --> ?? also drop Barren?
+  filter(!grepl("Fallow|Idle", class_name, ignore.case=T)) %>%
+  
+  mutate(#id = as.numeric(id),
+          corn = ifelse(grepl("corn", class_name, ignore.case=T), 1, 0),
+         cotton = ifelse(grepl("cotton", class_name, ignore.case=T), 1, 0),
+         soybean = ifelse(grepl("soybean", class_name, ignore.case=T), 1, 0),
+         
+         # not inlcuding: buckwheat - it is not a grain but a seed and pesticide load/treatment may differ; barley - a grain not a wheat
+         wheat = ifelse(grepl("wheat|wht", class_name, ignore.case=T), 1, 0),
+         # corn, cotton, soybeans, canola
+         high_gly_use = ifelse(corn==1 | cotton==1 | soybean==1 | wheat==1 | grepl("canola", class_name, ignore.case=T), 1, 0),
+         cultivated = 1
+         ) %>%
+  bind_rows(noncultivated_crops) %>%
+  mutate(id = as.numeric(id),
+         
+         forest = ifelse(grepl("forest", class_name, ignore.case=T), 1, 0),
+         # shrubland has 2 IDs
+         grass = ifelse(grepl("grass|shrubland|hay", class_name, ignore.case=T), 1, 0),
+         developed = ifelse(grepl("developed", class_name, ignore.case=T), 1, 0),
+         developed_low = ifelse(grepl("low intensity", class_name, ignore.case=T), 1, 0),
+         developed_med = ifelse(grepl("med intensity", class_name, ignore.case=T), 1, 0),
+         developed_high = ifelse(grepl("high intensity", class_name, ignore.case=T), 1, 0),
+         # could look at low/medium/high intensity
+         # --> keep barren here?
+         # barren has 2 IDs
+         miscellaneous = ifelse(grepl("wetlands|water|snow|aquaculture|clouds|no data|barren|undefined", class_name, ignore.case=T) &
+                                  class_name != "Watermelons", 1, 0)
+         ) %>%
+  mutate_all(~ifelse(is.na(.), 0, .))
 
-write.csv(cultivated_crops, file.path("data", "modified", "cultivated_crops.csv"), row.names = F)
+write.csv(crops, file.path("data", "modified", "land_types.csv"), row.names = F)
 
-# cultivated_crops <- read.csv(file.path("data", "modified", "cultivated_crops.csv"))
+# # check. looks good. some crop IDs are in multiple categories, as expected
+# crops %>% 
+#   select(class_name, cultivated, forest, grass, contains("developed"), miscellaneous) %>% 
+#   pivot_longer(-class_name) %>% 
+#   filter(value==1) %>%
+#   arrange(name) %>% 
+#   #rownames_to_column() %>%
+#   #mutate(class_name = paste(rowname, class_name, collapse = "_"))
+#   ggplot(aes(y=class_name, fill=name)) + 
+#   geom_histogram(stat="count")
+
+# cultivated_crops <- read.csv(file.path("data", "modified", "crops.csv"))
 ########################################################################################################################
 # NLCD
 ########################################################################################################################
@@ -182,13 +264,34 @@ write.csv(cultivated_crops, file.path("data", "modified", "cultivated_crops.csv"
 
 
 ########################################################################################################################
+# TEMPERATURE (CECILIA)
+########################################################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+########################################################################################################################
 # CENSUS STATE REIGIONS AND DIVISIONS
 ########################################################################################################################
 # Remove first few lines for easier merging
+
 states <- readxl::read_xlsx(file.path("data", "raw", "census", "state-geocodes-v2021.xlsx"), skip = 5, 
                             col_types = c("numeric", "numeric", "numeric", "text")) %>%
-  rename("STATE2KX" = "State (FIPS)")
-# states
+  rename("STATE2KX" = "State (FIPS)") %>%
+  # RDCA: "state is coded as a character"
+  #"2 digit numeric w/ leading 0s"
+  mutate(STATE2KX = str_pad(STATE2KX, 2, pad = "0"))
+
 
 write.csv(states, file.path("data", "modified", "state_divisions.csv"), row.names = F)
 
