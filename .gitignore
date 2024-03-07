@@ -2,3 +2,10 @@
 .Rhistory
 .RData
 .Ruserdata
+.DS_Store
+R.RProj
+data/
+output/
+old/
+*.html
+*.docx

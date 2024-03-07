@@ -15,7 +15,8 @@ pacman::p_load(raster, rgdal,
                tidyverse,
                nhanesA, haven, # retrieve NHANES data
                sf,
-               tigris, FedData #NLCD
+               tigris, FedData#, #NLCD
+               #epinoaa # read_nclimgrid_epinoaa() for temp data
                )
 
 ########################################################################################################################
@@ -183,27 +184,23 @@ write.csv(filter(county_gly, YEAR == "2017"), file.path("data", "modified", "201
 ########################################################################################################################
 cdl_path <- file.path("data", "raw", "cdl")
 
+# areas that likely do not have pesticide spray
+no_spray_land <- c("Fallow", "Idle", "Barren")
+
 noncultivated_crops <- read.delim(file.path(cdl_path, "noncultivated_crops.txt"), skip = 1, col.names = c("class_name")) %>%
   rownames_to_column(var="id") %>%
   mutate(cultivated = 0)
   
 crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip = 1, col.names = c("class_name")) %>%
   rownames_to_column(var="id") %>%
-  
-  # --> ?? also drop Barren?
-  filter(!grepl("Fallow|Idle", class_name, ignore.case=T)) %>%
-  
-  mutate(#id = as.numeric(id),
-          corn = ifelse(grepl("corn", class_name, ignore.case=T), 1, 0),
+  mutate(corn = ifelse(grepl("corn", class_name, ignore.case=T), 1, 0),
          cotton = ifelse(grepl("cotton", class_name, ignore.case=T), 1, 0),
          soybean = ifelse(grepl("soybean", class_name, ignore.case=T), 1, 0),
-         
          # not inlcuding: buckwheat - it is not a grain but a seed and pesticide load/treatment may differ; barley - a grain not a wheat
          wheat = ifelse(grepl("wheat|wht", class_name, ignore.case=T), 1, 0),
          # corn, cotton, soybeans, canola
          high_gly_use = ifelse(corn==1 | cotton==1 | soybean==1 | wheat==1 | grepl("canola", class_name, ignore.case=T), 1, 0),
-         cultivated = 1
-         ) %>%
+         cultivated = ifelse(grepl(paste(no_spray_land, collapse = "|"), class_name, ignore.case=T), 0, 1)) %>%
   bind_rows(noncultivated_crops) %>%
   mutate(id = as.numeric(id),
          
@@ -217,9 +214,8 @@ crops <- read.delim(file.path(cdl_path, "cultivated_crops.txt"), skip = 1, col.n
          # could look at low/medium/high intensity
          # --> keep barren here?
          # barren has 2 IDs
-         miscellaneous = ifelse(grepl("wetlands|water|snow|aquaculture|clouds|no data|barren|undefined", class_name, ignore.case=T) &
-                                  class_name != "Watermelons", 1, 0)
-         ) %>%
+         miscellaneous = ifelse(grepl("wetlands|water|snow|aquaculture|clouds|no data|fallow|idle|barren|undefined", class_name, ignore.case=T) &
+                                  class_name != "Watermelons", 1, 0)) %>%
   mutate_all(~ifelse(is.na(.), 0, .))
 
 write.csv(crops, file.path("data", "modified", "land_types.csv"), row.names = F)
@@ -266,7 +262,7 @@ write.csv(crops, file.path("data", "modified", "land_types.csv"), row.names = F)
 ########################################################################################################################
 # TEMPERATURE (CECILIA)
 ########################################################################################################################
-
+# https://www.ncei.noaa.gov/access/metadata/landing-page/bin/iso?id=gov.noaa.ncdc:C00332 
 
 
 
