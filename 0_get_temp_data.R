@@ -125,8 +125,13 @@ modify_temp_file <- function(yr) {
 }
 
 # modify & save annual files
-lapply(yrs, function(x) {
+lapply(#yrs, 
+  c(2014:2018),
+       function(x) {
+  message(x)
   modified_files <- modify_temp_file(x) 
+  
+  message("saving file")
   write.csv(modified_files, file.path(dt_path2, paste0("cen_temp_", x, ".csv")))
 })
 
@@ -150,7 +155,7 @@ lapply(yrs, function(x) {
 # temp
 # plot(temp$tmax_1)
 
-temp1312
+#temp1312
 
 
 ########################################################################################################################
