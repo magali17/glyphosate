@@ -26,7 +26,7 @@ pacman::p_load(tidyverse,
                units, # drop_units()
                parallel, #if use mclapply()
                terra # raster files
-               )
+)
 
 #################################################################################
 # LOAD DATA ENVIRONMENT
@@ -45,6 +45,8 @@ load(file.path("output", "analysis_datasets.rds"))
 lat_long_crs <- 4326 #WGS84
 
 ## load GEO data and set the CRS to meters like the external files
+
+# [next 2 lines are slighly diff than what we submited to nhanes where we dropped 'fake_']
 ## --> NOTE: fake_GEO_2010 NEEDS TO BE UPDATED BY RDC WITH THE REAL PARTICIPATE GEOCODE FILE
 GEO_2010 <- fake_GEO_2010 %>%  
   # make geocoded file into a spatial file
@@ -52,7 +54,7 @@ GEO_2010 <- fake_GEO_2010 %>%
            crs=lat_long_crs) %>%
   # set GEO CRS to be the same as the spatial raster files (in meters, not degrees)
   st_transform(st_crs(cdl_2013)) 
-  
+
 ## GEO FILES FOR NHANES PARTICIPANTS BY YEAR
 geo_2013 <- filter(GEO_2010, SEQN %in% nhanes2013$SSGLYP_H$SEQN)
 geo_2015 <- filter(GEO_2010, SEQN %in% nhanes2015$SSGLYP_I$SEQN)
@@ -75,12 +77,18 @@ crop_frequency_in_buffer <- function(spatial_raster_data, geo_data, buffer.) {
   crop_frequency <- extract(spatial_raster_data, st_buffer(geo_data, buffer.), 
                             exact=T) %>%
     # frequency of crops in each buffered location
+    ## summarize results to DROP ANY GEOLOCATION information (e.g., lat, long). 
+    ## This returns the total number of pixels (pixel_count [can include pixel fractions]) 
+    ## within a given buffer size (buffer_m) for any given SEQN (ID) and crop type (class_name).
     group_by(ID, class_name) %>%
     summarize(pixel_count=sum(fraction)) %>%   
     ungroup() %>%
     mutate(buffer_m = buffer.)
   
   # add NHANES SEQN (vs raster ID) to results
+  ## NO GEOLOCATION INFORMATION IS RETURNED! This function returns: SEQN, crop type (class_name), 
+  ## number of pixels for a given crop type (pixel_count), and the buffer size (buffer_m). 
+  ## These are the results we will receive from an RDC data analyst. We will thus not work directly with geolocations.
   crop_frequency <- left_join(distinct(geo_data, ID, SEQN),
                               crop_frequency) %>%
     # drop temporary ID
@@ -98,17 +106,17 @@ buffers <- c(250, 500, 1e3, 2e3)
 # could use parallel processing to speed this up, e.g., mclapply(...mc.cores = 4...) 
 crop_frequency_2013 <- lapply(buffers,
                               function(b) {crop_frequency_in_buffer(spatial_raster_data = cdl_2013, #2013 land types file
-                                                                      geo_data = geo_2013, #geocodes for 2013-2014 NHANES (may need to split this file smaller for this to run)
-                                                                      buffer.=b)}) %>%
+                                                                    geo_data = geo_2013, #geocodes for 2013-2014 NHANES (may need to split this file smaller for this to run)
+                                                                    buffer.=b)}) %>%
   # combine into 1 dataframe
   bind_rows()
 
- 
+
 ## 2015 CROP TYPE AND 2015-16 NHANES SSGLYP
 crops_in_buffer_2015 <- lapply(buffers,
                                function(b)  {crop_frequency_in_buffer(spatial_raster_data = cdl_2015, #2015 land types file
-                                                                        geo_data = geo_2015, #geocodes for 2015-2016 NHANES
-                                                                        buffer.=b)}) %>%
+                                                                      geo_data = geo_2015, #geocodes for 2015-2016 NHANES
+                                                                      buffer.=b)}) %>%
   bind_rows()
 
 ## 2017 CROP TYPE AND 2017-18 NHANES SSGLYP
@@ -117,13 +125,12 @@ crops_in_buffer_2017 <- lapply(buffers,
                                                                       geo_data = geo_2017, #geocodes for 2017-2018 NHANES
                                                                       buffer.=b)}) %>%
   bind_rows()
-  
+
 
 #################################################################################
 # 2. PROXIMITY TO LAND TYPE
 #################################################################################
 # FUNCTION RETURNS THE DISTANCE BETWEEN A LOCATION AND VARIOUS CROP LAND TYPES
-# anything beyond 2,000 m is set to 2,000 m
 distance_to_ag <- function(spatial_raster_data, geo_data, max_distance=2e3) {
   
   # only keep raster area near a location (speeds things up a lot; crashes otherwise)
@@ -133,6 +140,9 @@ distance_to_ag <- function(spatial_raster_data, geo_data, max_distance=2e3) {
     st_as_sf()
   
   #distance between each land type and each location
+  ## NO GEOLOCATION INFORMATION IS RETURNED! This function returns: SEQN, crop type (class_name), 
+  ## and distance a given crop type (distance_m). These are the results we will receive from an 
+  ## RDC data analyst. We will thus not work directly with geolocations.
   pt_distances <- st_distance(land_type, geo_data, name="distance_m") %>%
     drop_units() %>%
     as.data.frame() %>%
@@ -150,11 +160,11 @@ distance_to_ag <- function(spatial_raster_data, geo_data, max_distance=2e3) {
 
 # --> NOTE: FULL GEO files (e.g., geo_2013) may be too large and crash; code works when you split these into smaller files of ~300 rows each for each year
 # 2013
-crop_distances_2013 <- lapply(1:nrow(geo_2013[1:2,]), # participants for 2013-2014 NHANES
+crop_distances_2013 <- lapply(1:nrow(geo_2013), # participants for 2013-2014 NHANES
                               function(x) {
-                             distance_to_ag(spatial_raster_data=cdl_2013, # 2013 land types file
-                                            geo_data = geo_2013[x,] # geocodes for 2013-2014 NHANES
-                                            )}) %>%
+                                distance_to_ag(spatial_raster_data=cdl_2013, # 2013 land types file
+                                               geo_data = geo_2013[x,] # geocodes for 2013-2014 NHANES
+                                )}) %>%
   bind_rows()
 
 # 2015
@@ -162,19 +172,20 @@ crop_distances_2015 <- lapply(1:nrow(geo_2015),  # participants for 2015-2016 NH
                               function(x) {
                                 distance_to_ag(spatial_raster_data=cdl_2015, # 2015 land types file
                                                geo_data = geo_2015[x,] # geocodes for 2015-2016 NHANES
-                                               )}) %>%
+                                )}) %>%
   bind_rows()
 
 # 2017
 crop_distances_2017 <- lapply(1:nrow(geo_2017),  # participants for 2017-2018 NHANES
-                                function(x) {
-                                  distance_to_ag(spatial_raster_data=cdl_2017, # 2017 land types file
-                                                 geo_data = geo_2017[x,] # geocodes for 2017-2018 NHANES
-                                                 )}) %>%
+                              function(x) {
+                                distance_to_ag(spatial_raster_data=cdl_2017, # 2017 land types file
+                                               geo_data = geo_2017[x,] # geocodes for 2017-2018 NHANES
+                                )}) %>%
   bind_rows()
 
 #################################################################################
-# SAVE THE DATA FILES WE NEED TO ACCESS IN THE LAB 
+# SAVE THE DATA FILES THAT RDC WILL GIVE US ACCESS TO IN THE LAB 
+## NOTE: THESE FILES DO NOT HAVE ANY PARTICIPANT GEOLCOATIONS. 
 #################################################################################
 save(crop_frequency_2013, 
      crop_frequency_2015,
